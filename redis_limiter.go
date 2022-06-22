@@ -51,19 +51,19 @@ func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
 		return ErrLimitExceeded
 	}
 
-	p := l.client.Pipeline()
 	ctx := r.Context()
 
-	expiredResult := l.clearExpiredRequests(ctx, p, key, c.Duration)
-	addResult := l.addNewRequest(ctx, p, key)
-	countResult := l.getRequestCount(ctx, p, key)
+	var count uint64
 
-	count, countErr := countResult.Result()
-
-	if _, err := p.Exec(ctx); err != nil {
+	if expiredResult := l.clearExpiredRequests(ctx, key, c.Duration); expiredResult.Err() != nil {
 		return ErrRedis
-	} else if expiredResult.Err() != nil || addResult.Err() != nil || countErr != nil {
+	} else if addResult := l.addNewRequest(ctx, key); addResult.Err() != nil {
 		return ErrRedis
+	} else if countResult := l.getRequestCount(ctx, key); countResult.Err() != nil {
+		return ErrRedis
+	} else {
+		v, _ := countResult.Result()
+		count = uint64(v)
 	}
 
 	if uint64(count) > uint64(c.RequestLimit) {
@@ -73,18 +73,18 @@ func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
 	return nil
 }
 
-func (l *redisLimiter) clearExpiredRequests(ctx context.Context, p redis.Pipeliner, key string, duration time.Duration) *redis.IntCmd {
+func (l *redisLimiter) clearExpiredRequests(ctx context.Context, key string, duration time.Duration) *redis.IntCmd {
 	min := time.Now().Add(-duration).UnixMilli()
 
-	removeByScore := p.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(min, 10))
+	removeByScore := l.client.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(min, 10))
 	return removeByScore
 }
 
-func (l *redisLimiter) addNewRequest(ctx context.Context, p redis.Pipeliner, key string) *redis.IntCmd {
+func (l *redisLimiter) addNewRequest(ctx context.Context, key string) *redis.IntCmd {
 	rid := uuid.New()
 	now := time.Now().UnixMilli()
 
-	add := p.ZAdd(ctx, key, &redis.Z{
+	add := l.client.ZAdd(ctx, key, &redis.Z{
 		Score:  float64(now),
 		Member: rid.String(),
 	})
@@ -92,7 +92,7 @@ func (l *redisLimiter) addNewRequest(ctx context.Context, p redis.Pipeliner, key
 	return add
 }
 
-func (l *redisLimiter) getRequestCount(ctx context.Context, p redis.Pipeliner, key string) *redis.IntCmd {
-	count := p.ZCount(ctx, key, "-inf", "+inf")
+func (l *redisLimiter) getRequestCount(ctx context.Context, key string) *redis.IntCmd {
+	count := l.client.ZCount(ctx, key, "-inf", "+inf")
 	return count
 }
