@@ -14,7 +14,7 @@ type redisLimiter struct {
 	limiter
 }
 
-func CreateRedisRateLimiter(ctx context.Context, r *redis.Client, configurations map[uint32]LimitConfiguration,
+func CreateRedisRateLimiter(ctx context.Context, name string, r *redis.Client, configurations map[uint32]LimitConfiguration,
 	getKeyTypeFunc func(r *http.Request) (string, uint32)) Limiter {
 
 	if r == nil {
@@ -24,6 +24,7 @@ func CreateRedisRateLimiter(ctx context.Context, r *redis.Client, configurations
 	var l = redisLimiter{
 		client: r,
 		limiter: limiter{
+			name:                  name,
 			context:               ctx,
 			getKeyFromRequestFunc: getKeyTypeFunc,
 			storageKeyGen:         defaultStorageKeyGen,
@@ -42,6 +43,8 @@ func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
 	if key == "" {
 		return ErrLimitExceeded
 	}
+
+	key = key + l.name
 
 	c, ok := l.configurations[t]
 	if !ok {

@@ -8,12 +8,12 @@ import (
 )
 
 const (
-	defautlStorageKeyPreset = "hrl-%s"
+	defaultStorageKeyPreset = "hrl-%s-"
 )
 
 var (
 	defaultStorageKeyGen = func(key string) string {
-		return fmt.Sprintf(defautlStorageKeyPreset, key)
+		return fmt.Sprintf(defaultStorageKeyPreset, key)
 	}
 )
 
@@ -23,6 +23,7 @@ type Limiter interface {
 }
 
 type limiter struct {
+	name                  string
 	context               context.Context
 	getKeyFromRequestFunc func(r *http.Request) (string, uint32)
 	storageKeyGen         func(key string) string
