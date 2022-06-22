@@ -74,17 +74,18 @@ func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
 }
 
 func (l *redisLimiter) clearExpiredRequests(ctx context.Context, p redis.Pipeliner, key string, duration time.Duration) *redis.IntCmd {
-	min := time.Now().Add(-duration)
+	min := time.Now().Add(-duration).UnixMilli()
 
-	removeByScore := p.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(min.UnixMilli(), 10))
+	removeByScore := p.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(min, 10))
 	return removeByScore
 }
 
 func (l *redisLimiter) addNewRequest(ctx context.Context, p redis.Pipeliner, key string) *redis.IntCmd {
 	rid := uuid.New()
+	now := time.Now().UnixMilli()
 
 	add := p.ZAdd(ctx, key, &redis.Z{
-		Score:  float64(time.Now().UnixMilli()),
+		Score:  float64(now),
 		Member: rid,
 	})
 
