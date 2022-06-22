@@ -15,7 +15,7 @@ type redisLimiter struct {
 }
 
 func CreateRedisRateLimiter(ctx context.Context, r *redis.Client, configurations map[uint32]LimitConfiguration,
-	getKeyTypeFunc func(r *http.Request) (string, uint32)) (Limiter, error) {
+	getKeyTypeFunc func(r *http.Request) (string, uint32)) Limiter {
 
 	if r == nil {
 		panic("invalid redis client")
@@ -30,7 +30,7 @@ func CreateRedisRateLimiter(ctx context.Context, r *redis.Client, configurations
 			configurations:        configurations,
 		},
 	}
-	return &l, nil
+	return &l
 }
 
 func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
