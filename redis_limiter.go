@@ -86,7 +86,7 @@ func (l *redisLimiter) addNewRequest(ctx context.Context, p redis.Pipeliner, key
 
 	add := p.ZAdd(ctx, key, &redis.Z{
 		Score:  float64(now),
-		Member: rid,
+		Member: rid.String(),
 	})
 
 	return add
