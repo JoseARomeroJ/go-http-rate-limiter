@@ -49,6 +49,8 @@ func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
 	c, ok := l.configurations[t]
 	if !ok {
 		return ErrLimitExceeded
+	} else if c.RequestLimit == 0 {
+		return nil
 	}
 
 	ctx := r.Context()
