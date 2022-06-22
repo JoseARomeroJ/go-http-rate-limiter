@@ -44,7 +44,7 @@ func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
 		return ErrLimitExceeded
 	}
 
-	key = key + l.name
+	key = key + "-" + l.name
 
 	c, ok := l.configurations[t]
 	if !ok {
