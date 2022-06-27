@@ -11,7 +11,6 @@ import (
 
 type redisLimiter struct {
 	client *redis.Client
-	limiter
 }
 
 func CreateRedisRateLimiter(ctx context.Context, name string, r *redis.Client, configurations map[uint32]LimitConfiguration,
@@ -21,68 +20,28 @@ func CreateRedisRateLimiter(ctx context.Context, name string, r *redis.Client, c
 		panic("invalid redis client")
 	}
 
-	var l = redisLimiter{
-		client: r,
-		limiter: limiter{
-			name:                  name,
-			context:               ctx,
-			getKeyFromRequestFunc: getKeyTypeFunc,
-			storageKeyGen:         defaultStorageKeyGen,
-			configurations:        configurations,
+	var l = limiter{
+		name:                  name,
+		context:               ctx,
+		getKeyFromRequestFunc: getKeyTypeFunc,
+		storageKeyGen:         defaultStorageKeyGen,
+		limitCacheHandler: &redisLimiter{
+			client: r,
 		},
+		configurations: configurations,
 	}
+
 	return &l
 }
 
-func (l *redisLimiter) CheckLimitFromRequest(r *http.Request) error {
-	if r == nil {
-		panic("invalid request")
-	}
-
-	key, t := l.getKeyFromRequestFunc(r)
-	if key == "" {
-		return ErrLimitExceeded
-	}
-
-	key = key + "-" + l.name
-
-	c, ok := l.configurations[t]
-	if !ok {
-		return ErrLimitExceeded
-	} else if c.RequestLimit == 0 {
-		return nil
-	}
-
-	ctx := r.Context()
-
-	var count uint64
-
-	if expiredResult := l.clearExpiredRequests(ctx, key, c.Duration); expiredResult.Err() != nil {
-		return ErrRedis
-	} else if addResult := l.addNewRequest(ctx, key); addResult.Err() != nil {
-		return ErrRedis
-	} else if countResult := l.getRequestCount(ctx, key); countResult.Err() != nil {
-		return ErrRedis
-	} else {
-		v, _ := countResult.Result()
-		count = uint64(v)
-	}
-
-	if uint64(count) > uint64(c.RequestLimit) {
-		return ErrLimitExceeded
-	}
-
-	return nil
-}
-
-func (l *redisLimiter) clearExpiredRequests(ctx context.Context, key string, duration time.Duration) *redis.IntCmd {
+func (l *redisLimiter) clearExpiredRequests(ctx context.Context, key string, duration time.Duration) error {
 	min := time.Now().Add(-duration).UnixMilli()
 
 	removeByScore := l.client.ZRemRangeByScore(ctx, key, "0", strconv.FormatInt(min, 10))
-	return removeByScore
+	return removeByScore.Err()
 }
 
-func (l *redisLimiter) addNewRequest(ctx context.Context, key string) *redis.IntCmd {
+func (l *redisLimiter) addNewRequest(ctx context.Context, key string) error {
 	rid := uuid.New()
 	now := time.Now().UnixMilli()
 
@@ -91,10 +50,12 @@ func (l *redisLimiter) addNewRequest(ctx context.Context, key string) *redis.Int
 		Member: rid.String(),
 	})
 
-	return add
+	return add.Err()
 }
 
-func (l *redisLimiter) getRequestCount(ctx context.Context, key string) *redis.IntCmd {
+func (l *redisLimiter) getRequestCount(ctx context.Context, key string) (uint64, error) {
 	count := l.client.ZCount(ctx, key, "-inf", "+inf")
-	return count
+	c, err := count.Result()
+
+	return uint64(c), err
 }
