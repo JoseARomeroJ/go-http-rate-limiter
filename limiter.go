@@ -69,6 +69,7 @@ func (l limiter) CheckLimitFromRequest(r *http.Request) error {
 	ec, ok := c.EndpointsConfigurations[r.URL.Path]
 	if ok {
 		config = ec
+		key += r.URL.Path
 	} else {
 		config = c.LimitConfiguration
 	}
