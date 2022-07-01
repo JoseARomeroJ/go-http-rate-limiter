@@ -13,7 +13,7 @@ type redisLimiter struct {
 	client *redis.Client
 }
 
-func CreateRedisRateLimiter(ctx context.Context, name string, r *redis.Client, configurations map[uint32]LimitConfiguration,
+func CreateRedisRateLimiter(ctx context.Context, name string, r *redis.Client, configurations map[uint32]GeneralLimitConfiguration,
 	getKeyTypeFunc func(r *http.Request) (string, uint32)) Limiter {
 
 	if r == nil {

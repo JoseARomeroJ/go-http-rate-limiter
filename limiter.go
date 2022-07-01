@@ -28,7 +28,7 @@ type limiter struct {
 	getKeyFromRequestFunc func(r *http.Request) (string, uint32)
 	storageKeyGen         func(key string) string
 	limitCacheHandler     limitCacheHandler
-	configurations        map[uint32]LimitConfiguration
+	configurations        map[uint32]GeneralLimitConfiguration
 }
 
 type limitCacheHandler interface {
@@ -37,9 +37,19 @@ type limitCacheHandler interface {
 	getRequestCount(ctx context.Context, key string) (uint64, error)
 }
 
+type GeneralLimitConfiguration struct {
+	LimitConfiguration
+	EndpointsConfigurations map[string]LimitEndpointConfiguration
+}
+
 type LimitConfiguration struct {
 	RequestLimit uint32        `json:"limit"`
 	Duration     time.Duration `json:"duration"`
+}
+
+type LimitEndpointConfiguration struct {
+	Endpoint string `json:"endpoint"`
+	LimitConfiguration
 }
 
 func (l limiter) CheckLimitFromRequest(r *http.Request) error {
@@ -54,18 +64,28 @@ func (l limiter) CheckLimitFromRequest(r *http.Request) error {
 
 	key = key + "-" + l.name
 
+	var config LimitConfiguration
+
 	c, ok := l.configurations[t]
 	if !ok {
 		return ErrLimitExceeded
-	} else if c.RequestLimit == 0 {
+	}
+
+	ec, ok := c.EndpointsConfigurations[r.URL.Path]
+	if ok {
+		config = ec.LimitConfiguration
+	} else {
+		config = c.LimitConfiguration
+	}
+
+	if config.RequestLimit == 0 {
 		return nil
 	}
 
 	ctx := r.Context()
-
 	var count uint64
 
-	if expiredErr := l.limitCacheHandler.clearExpiredRequests(ctx, key, c.Duration); expiredErr != nil {
+	if expiredErr := l.limitCacheHandler.clearExpiredRequests(ctx, key, config.Duration); expiredErr != nil {
 		return expiredErr
 	} else if addErr := l.limitCacheHandler.addNewRequest(ctx, key); addErr != nil {
 		return addErr
@@ -75,7 +95,7 @@ func (l limiter) CheckLimitFromRequest(r *http.Request) error {
 		count = num
 	}
 
-	if count > uint64(c.RequestLimit) {
+	if count > uint64(config.RequestLimit) {
 		return ErrLimitExceeded
 	}
 
