@@ -39,17 +39,12 @@ type limitCacheHandler interface {
 
 type GeneralLimitConfiguration struct {
 	LimitConfiguration
-	EndpointsConfigurations map[string]LimitEndpointConfiguration
+	EndpointsConfigurations map[string]LimitConfiguration
 }
 
 type LimitConfiguration struct {
 	RequestLimit uint32        `json:"limit"`
 	Duration     time.Duration `json:"duration"`
-}
-
-type LimitEndpointConfiguration struct {
-	Endpoint string `json:"endpoint"`
-	LimitConfiguration
 }
 
 func (l limiter) CheckLimitFromRequest(r *http.Request) error {
@@ -73,7 +68,7 @@ func (l limiter) CheckLimitFromRequest(r *http.Request) error {
 
 	ec, ok := c.EndpointsConfigurations[r.URL.Path]
 	if ok {
-		config = ec.LimitConfiguration
+		config = ec
 	} else {
 		config = c.LimitConfiguration
 	}
